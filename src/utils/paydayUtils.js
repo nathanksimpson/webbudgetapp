@@ -10,14 +10,26 @@ export function calculateNextPayday(schedule) {
   today.setHours(0, 0, 0, 0);
 
   if (schedule.type === 'manual') {
+    if (!schedule.nextPayday || schedule.nextPayday === '') {
+      return null;
+    }
     const nextPayday = new Date(schedule.nextPayday);
+    if (isNaN(nextPayday.getTime())) {
+      return null; // Invalid date
+    }
     nextPayday.setHours(0, 0, 0, 0);
     // If manual date is in the past, return it as-is (user should update)
     return nextPayday.toISOString().split('T')[0];
   }
 
   if (schedule.type === 'recurring') {
+    if (!schedule.anchorDate || schedule.anchorDate === '') {
+      return null;
+    }
     const anchorDate = new Date(schedule.anchorDate);
+    if (isNaN(anchorDate.getTime())) {
+      return null; // Invalid date
+    }
     anchorDate.setHours(0, 0, 0, 0);
     
     let nextPayday = new Date(anchorDate);
@@ -76,10 +88,13 @@ export function getBillsBeforePayday(bills, nextPayday) {
   if (!bills || !nextPayday) return [];
 
   const payday = new Date(nextPayday);
+  if (isNaN(payday.getTime())) return [];
   payday.setHours(23, 59, 59, 999); // Include bills on payday
 
   return bills.filter(bill => {
+    if (!bill || !bill.date) return false;
     const billDate = new Date(bill.date);
+    if (isNaN(billDate.getTime())) return false;
     billDate.setHours(0, 0, 0, 0);
     return billDate <= payday;
   });
@@ -95,10 +110,13 @@ export function getExpensesBeforePayday(expenses, nextPayday) {
   if (!expenses || !nextPayday) return [];
 
   const payday = new Date(nextPayday);
+  if (isNaN(payday.getTime())) return [];
   payday.setHours(23, 59, 59, 999); // Include expenses on payday
 
   return expenses.filter(expense => {
+    if (!expense || !expense.date) return false;
     const expenseDate = new Date(expense.date);
+    if (isNaN(expenseDate.getTime())) return false;
     expenseDate.setHours(0, 0, 0, 0);
     return expenseDate <= payday;
   });
@@ -174,10 +192,14 @@ export function calculateWeeklyBudget(dailyBudget, startDate) {
  * @returns {number} Days remaining in current week
  */
 export function getDaysInCurrentWeek(startDate, nextPayday) {
+  if (!nextPayday) return 0;
+  
   const start = new Date(startDate);
+  if (isNaN(start.getTime())) return 0;
   start.setHours(0, 0, 0, 0);
   
   const payday = new Date(nextPayday);
+  if (isNaN(payday.getTime())) return 0;
   payday.setHours(0, 0, 0, 0);
 
   // Get Saturday of current week

@@ -13,8 +13,8 @@ import {
 
 function PaydayCalculator({
   paydayData,
-  categories,
-  expenses,
+  categories = [],
+  expenses = [],
   onUpdatePaydayData,
   onAddBill,
   onUpdateBill,
@@ -35,12 +35,24 @@ function PaydayCalculator({
     bills: []
   };
 
-  const [localData, setLocalData] = useState(() => paydayData || defaultData);
+  const [localData, setLocalData] = useState(() => {
+    try {
+      return paydayData || defaultData;
+    } catch (error) {
+      console.error('Error initializing payday data:', error);
+      return defaultData;
+    }
+  });
 
   useEffect(() => {
-    if (paydayData) {
-      setLocalData(paydayData);
-    } else {
+    try {
+      if (paydayData) {
+        setLocalData(paydayData);
+      } else {
+        setLocalData(defaultData);
+      }
+    } catch (error) {
+      console.error('Error updating payday data:', error);
       setLocalData(defaultData);
     }
   }, [paydayData]);
