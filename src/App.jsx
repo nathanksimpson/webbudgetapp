@@ -7,6 +7,23 @@ import PaydayCalculator from './components/PaydayCalculator';
 import { loadBudgetData, saveBudgetData } from './utils/storage';
 import './styles/App.css';
 
+// Default payday calculator structure (matches storage.js)
+function getDefaultPaydayData() {
+  return {
+    startingBalance: null,
+    spendingTarget: { enabled: false, amount: 0, period: 'daily' },
+    savingsGoal: { enabled: false, amount: 0 },
+    schedule: {
+      type: 'manual',
+      nextPayday: '',
+      recurringType: 'biweekly',
+      anchorDate: '',
+      interval: 1
+    },
+    bills: []
+  };
+}
+
 function App() {
   const [categories, setCategories] = useState([]);
   const [dailyExpenses, setDailyExpenses] = useState([]);
@@ -18,7 +35,8 @@ function App() {
     const data = loadBudgetData();
     setCategories(data.categories || []);
     setDailyExpenses(data.dailyExpenses || []);
-    setPaydayCalculator(data.paydayCalculator || null);
+    // Always initialize with default structure if null, so component always has valid data
+    setPaydayCalculator(data.paydayCalculator || getDefaultPaydayData());
   }, []);
 
   // Save data to localStorage whenever it changes
@@ -99,7 +117,8 @@ function App() {
 
   // Payday Calculator functions
   const handleUpdatePaydayData = (updates) => {
-    setPaydayCalculator(updates);
+    // Ensure we always have a valid structure
+    setPaydayCalculator({ ...getDefaultPaydayData(), ...updates });
   };
 
   const handleAddBill = (billData) => {
@@ -195,13 +214,14 @@ function App() {
   };
 
   const handleReset = () => {
+    const defaultPaydayData = getDefaultPaydayData();
     setCategories([]);
     setDailyExpenses([]);
-    setPaydayCalculator(null);
+    setPaydayCalculator(defaultPaydayData);
     saveBudgetData({ 
       categories: [], 
       dailyExpenses: [], 
-      paydayCalculator: null 
+      paydayCalculator: defaultPaydayData 
     });
   };
 
