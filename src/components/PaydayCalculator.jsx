@@ -8,7 +8,8 @@ import {
   calculateCurrentBalance,
   calculateDailyBudget,
   calculateWeeklyBudget,
-  getDaysInCurrentWeek
+  getDaysInCurrentWeek,
+  generateRecurringBillInstances
 } from '../utils/paydayUtils';
 
 function PaydayCalculator({
@@ -89,7 +90,13 @@ function PaydayCalculator({
   
   const nextPayday = calculateNextPayday(safeData.schedule);
   const daysRemaining = getDaysRemaining(nextPayday);
-  const billsBeforePayday = getBillsBeforePayday(safeBills, nextPayday) || [];
+  
+  // Generate recurring bill instances if we have a next payday
+  const billsWithInstances = nextPayday 
+    ? generateRecurringBillInstances(safeBills, nextPayday)
+    : safeBills;
+  
+  const billsBeforePayday = getBillsBeforePayday(billsWithInstances, nextPayday) || [];
   const expensesBeforePayday = getExpensesBeforePayday(safeExpenses, nextPayday) || [];
   
   const currentBalance = calculateCurrentBalance(

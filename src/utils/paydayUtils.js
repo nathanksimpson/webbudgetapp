@@ -216,3 +216,72 @@ export function getDaysInCurrentWeek(startDate, nextPayday) {
 
   return Math.max(0, diffDays);
 }
+
+/**
+ * Generate bill instances from recurring bills up to a target date
+ * @param {Array} bills - Array of bill objects (may include recurring bills)
+ * @param {string} targetDate - ISO date string to generate bills up to (usually next payday)
+ * @returns {Array} Array of bill instances (recurring bills expanded to individual instances)
+ */
+export function generateRecurringBillInstances(bills, targetDate) {
+  if (!bills || !Array.isArray(bills) || !targetDate) return bills || [];
+  
+  const target = new Date(targetDate);
+  if (isNaN(target.getTime())) return bills;
+  target.setHours(23, 59, 59, 999);
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const billInstances = [];
+  
+  bills.forEach(bill => {
+    if (!bill) return;
+    
+    // If not a recurring bill, add as-is
+    if (!bill.isRecurring || !bill.recurringType) {
+      billInstances.push(bill);
+      return;
+    }
+    
+    // Generate instances for recurring bills
+    const startDate = new Date(bill.startDate || bill.date);
+    if (isNaN(startDate.getTime())) {
+      // Invalid date, add as-is
+      billInstances.push(bill);
+      return;
+    }
+    startDate.setHours(0, 0, 0, 0);
+    
+    const interval = bill.recurringInterval || 1;
+    let currentDate = new Date(startDate);
+    
+    // Generate instances up to target date
+    while (currentDate <= target) {
+      if (currentDate >= today) { // Only include future or today's bills
+        billInstances.push({
+          ...bill,
+          id: `${bill.id}-${currentDate.toISOString().split('T')[0]}`,
+          date: currentDate.toISOString().split('T')[0],
+          isRecurringInstance: true,
+          recurringBillId: bill.id
+        });
+      }
+      
+      // Calculate next occurrence
+      if (bill.recurringType === 'weekly') {
+        currentDate.setDate(currentDate.getDate() + (7 * interval));
+      } else if (bill.recurringType === 'biweekly') {
+        currentDate.setDate(currentDate.getDate() + (14 * interval));
+      } else if (bill.recurringType === 'monthly') {
+        currentDate.setMonth(currentDate.getMonth() + interval);
+      } else if (bill.recurringType === 'yearly') {
+        currentDate.setFullYear(currentDate.getFullYear() + interval);
+      } else {
+        break; // Unknown recurring type
+      }
+    }
+  });
+  
+  return billInstances;
+}

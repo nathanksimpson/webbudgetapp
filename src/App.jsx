@@ -5,6 +5,7 @@ import BudgetSummary from './components/BudgetSummary';
 import ExportButton from './components/ExportButton';
 import PaydayCalculator from './components/PaydayCalculator';
 import { loadBudgetData, saveBudgetData } from './utils/storage';
+import { generateRecurringBillInstances } from './utils/paydayUtils';
 import './styles/App.css';
 
 // Default payday calculator structure (matches storage.js)
@@ -24,20 +25,81 @@ function getDefaultPaydayData() {
   };
 }
 
+// Recalculate category spent amounts from expenses and bills
+function recalculateCategorySpent(categories, expenses, bills) {
+  // Start with expenses
+  const spentFromExpenses = {};
+  expenses.forEach(exp => {
+    if (exp.categoryId) {
+      spentFromExpenses[exp.categoryId] = (spentFromExpenses[exp.categoryId] || 0) + (exp.amount || 0);
+    }
+  });
+
+  // Generate recurring bill instances up to 3 months in the future for budget planning
+  const today = new Date();
+  const futureDate = new Date(today);
+  futureDate.setMonth(futureDate.getMonth() + 3);
+  const billsWithInstances = bills && Array.isArray(bills) 
+    ? generateRecurringBillInstances(bills, futureDate.toISOString().split('T')[0])
+    : bills || [];
+
+  // Add bills (including recurring instances)
+  const spentFromBills = {};
+  if (billsWithInstances && Array.isArray(billsWithInstances)) {
+    billsWithInstances.forEach(bill => {
+      if (bill.categoryId) {
+        spentFromBills[bill.categoryId] = (spentFromBills[bill.categoryId] || 0) + (bill.amount || 0);
+      }
+    });
+  }
+
+  // Update categories with combined spent amounts
+  return categories.map(cat => ({
+    ...cat,
+    spent: (spentFromExpenses[cat.id] || 0) + (spentFromBills[cat.id] || 0)
+  }));
+}
+
 function App() {
   const [categories, setCategories] = useState([]);
   const [dailyExpenses, setDailyExpenses] = useState([]);
   const [paydayCalculator, setPaydayCalculator] = useState(null);
   const [activeTab, setActiveTab] = useState('budget'); // 'budget' or 'payday'
 
+
   // Load data from localStorage on mount
   useEffect(() => {
     const data = loadBudgetData();
-    setCategories(data.categories || []);
-    setDailyExpenses(data.dailyExpenses || []);
-    // Always initialize with default structure if null, so component always has valid data
-    setPaydayCalculator(data.paydayCalculator || getDefaultPaydayData());
+    const loadedCategories = data.categories || [];
+    const loadedExpenses = data.dailyExpenses || [];
+    const loadedPaydayCalculator = data.paydayCalculator || getDefaultPaydayData();
+    const loadedBills = loadedPaydayCalculator.bills || [];
+    
+    // Recalculate category spent amounts from both expenses and bills
+    const updatedCategories = recalculateCategorySpent(loadedCategories, loadedExpenses, loadedBills);
+    
+    setCategories(updatedCategories);
+    setDailyExpenses(loadedExpenses);
+    setPaydayCalculator(loadedPaydayCalculator);
   }, []);
+
+  // Recalculate category spent when expenses or bills change
+  useEffect(() => {
+    if (categories.length === 0) return;
+    
+    const bills = paydayCalculator?.bills || [];
+    const updatedCategories = recalculateCategorySpent(categories, dailyExpenses, bills);
+    
+    // Only update if there's a difference to avoid infinite loops
+    const hasChanges = updatedCategories.some((cat, index) => 
+      categories[index] && cat.spent !== categories[index].spent
+    );
+    
+    if (hasChanges) {
+      setCategories(updatedCategories);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dailyExpenses, paydayCalculator?.bills]);
 
   // Save data to localStorage whenever it changes
   useEffect(() => {
@@ -145,15 +207,7 @@ function App() {
 
     const updatedBills = [...(paydayCalculator?.bills || []), newBill];
     setPaydayCalculator({ ...paydayCalculator, bills: updatedBills });
-
-    // If bill is linked to a category, update category spent
-    if (billData.categoryId) {
-      setCategories(categories.map(cat => 
-        cat.id === billData.categoryId
-          ? { ...cat, spent: cat.spent + billData.amount }
-          : cat
-      ));
-    }
+    // Category spent will be recalculated automatically via useEffect
   };
 
   const handleUpdateBill = (billId, updates) => {
@@ -164,34 +218,7 @@ function App() {
       bill.id === billId ? { ...bill, ...updates } : bill
     );
     setPaydayCalculator({ ...paydayCalculator, bills: updatedBills });
-
-    // Update category spent if category changed
-    if (oldBill && updates.categoryId !== undefined) {
-      // Remove old bill amount from old category
-      if (oldBill.categoryId) {
-        setCategories(categories.map(cat => 
-          cat.id === oldBill.categoryId
-            ? { ...cat, spent: Math.max(0, cat.spent - oldBill.amount) }
-            : cat
-        ));
-      }
-      // Add new bill amount to new category
-      if (updates.categoryId) {
-        setCategories(categories.map(cat => 
-          cat.id === updates.categoryId
-            ? { ...cat, spent: cat.spent + (updates.amount || oldBill.amount) }
-            : cat
-        ));
-      }
-    } else if (oldBill && updates.amount !== undefined && oldBill.categoryId) {
-      // Amount changed, update category
-      const amountDiff = updates.amount - oldBill.amount;
-      setCategories(categories.map(cat => 
-        cat.id === oldBill.categoryId
-          ? { ...cat, spent: Math.max(0, cat.spent + amountDiff) }
-          : cat
-      ));
-    }
+    // Category spent will be recalculated automatically via useEffect
   };
 
   const handleDeleteBill = (billId) => {
@@ -201,15 +228,7 @@ function App() {
     if (window.confirm('Are you sure you want to delete this bill?')) {
       const updatedBills = bills.filter(b => b.id !== billId);
       setPaydayCalculator({ ...paydayCalculator, bills: updatedBills });
-
-      // If bill was linked to a category, update category spent
-      if (bill?.categoryId) {
-        setCategories(categories.map(cat => 
-          cat.id === bill.categoryId
-            ? { ...cat, spent: Math.max(0, cat.spent - bill.amount) }
-            : cat
-        ));
-      }
+      // Category spent will be recalculated automatically via useEffect
     }
   };
 

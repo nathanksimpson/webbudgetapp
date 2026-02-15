@@ -7,20 +7,29 @@ function BillManager({ bills, categories, onAddBill, onUpdateBill, onDeleteBill 
     date: '',
     amount: '',
     description: '',
-    categoryId: ''
+    categoryId: '',
+    isRecurring: false,
+    recurringType: 'monthly',
+    recurringInterval: 1,
+    startDate: ''
   });
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!formData.date || !formData.amount || formData.amount <= 0) {
+    const dateToUse = formData.isRecurring ? formData.startDate : formData.date;
+    if (!dateToUse || !formData.amount || formData.amount <= 0) {
       return;
     }
 
     const billData = {
-      date: formData.date,
+      date: formData.isRecurring ? formData.startDate : formData.date,
       amount: parseFloat(formData.amount),
       description: formData.description.trim(),
-      categoryId: formData.categoryId || null
+      categoryId: formData.categoryId || null,
+      isRecurring: formData.isRecurring || false,
+      recurringType: formData.isRecurring ? formData.recurringType : null,
+      recurringInterval: formData.isRecurring ? parseInt(formData.recurringInterval) : null,
+      startDate: formData.isRecurring ? formData.startDate : formData.date
     };
 
     if (editingId) {
@@ -31,16 +40,29 @@ function BillManager({ bills, categories, onAddBill, onUpdateBill, onDeleteBill 
       setIsAdding(false);
     }
 
-    setFormData({ date: '', amount: '', description: '', categoryId: '' });
+    setFormData({ 
+      date: '', 
+      amount: '', 
+      description: '', 
+      categoryId: '',
+      isRecurring: false,
+      recurringType: 'monthly',
+      recurringInterval: 1,
+      startDate: ''
+    });
   };
 
   const handleEdit = (bill) => {
     setEditingId(bill.id);
     setFormData({
-      date: bill.date,
+      date: bill.date || '',
       amount: bill.amount.toString(),
       description: bill.description || '',
-      categoryId: bill.categoryId || ''
+      categoryId: bill.categoryId || '',
+      isRecurring: bill.isRecurring || false,
+      recurringType: bill.recurringType || 'monthly',
+      recurringInterval: bill.recurringInterval || 1,
+      startDate: bill.startDate || bill.date || ''
     });
     setIsAdding(false);
   };
@@ -48,7 +70,16 @@ function BillManager({ bills, categories, onAddBill, onUpdateBill, onDeleteBill 
   const handleCancel = () => {
     setIsAdding(false);
     setEditingId(null);
-    setFormData({ date: '', amount: '', description: '', categoryId: '' });
+    setFormData({ 
+      date: '', 
+      amount: '', 
+      description: '', 
+      categoryId: '',
+      isRecurring: false,
+      recurringType: 'monthly',
+      recurringInterval: 1,
+      startDate: ''
+    });
   };
 
   const getCategoryName = (categoryId) => {
@@ -57,9 +88,15 @@ function BillManager({ bills, categories, onAddBill, onUpdateBill, onDeleteBill 
     return category ? category.name : null;
   };
 
-  // Sort bills by date
-  const sortedBills = [...bills].sort((a, b) => {
-    return new Date(a.date) - new Date(b.date);
+  // Filter out recurring bill instances (they're generated on the fly)
+  // Only show the recurring bill templates
+  const billTemplates = bills.filter(bill => !bill.isRecurringInstance);
+  
+  // Sort bills by date (use startDate for recurring, date for one-time)
+  const sortedBills = [...billTemplates].sort((a, b) => {
+    const dateA = new Date(a.startDate || a.date);
+    const dateB = new Date(b.startDate || b.date);
+    return dateA - dateB;
   });
 
   return (
@@ -80,13 +117,14 @@ function BillManager({ bills, categories, onAddBill, onUpdateBill, onDeleteBill 
         <form onSubmit={handleSubmit} className="bill-form">
           <div className="form-row">
             <div className="form-group">
-              <label>Due Date</label>
-              <input
-                type="date"
-                value={formData.date}
-                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                required
-              />
+              <label>
+                <input
+                  type="checkbox"
+                  checked={formData.isRecurring}
+                  onChange={(e) => setFormData({ ...formData, isRecurring: e.target.checked })}
+                />
+                Recurring Bill
+              </label>
             </div>
             <div className="form-group">
               <label>Amount</label>
@@ -101,6 +139,60 @@ function BillManager({ bills, categories, onAddBill, onUpdateBill, onDeleteBill 
               />
             </div>
           </div>
+          
+          {formData.isRecurring ? (
+            <>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Start Date</label>
+                  <input
+                    type="date"
+                    value={formData.startDate}
+                    onChange={(e) => setFormData({ ...formData, startDate: e.target.value, date: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Recurring Type</label>
+                  <select
+                    value={formData.recurringType}
+                    onChange={(e) => setFormData({ ...formData, recurringType: e.target.value })}
+                  >
+                    <option value="weekly">Weekly</option>
+                    <option value="biweekly">Biweekly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="yearly">Yearly</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Interval</label>
+                  <input
+                    type="number"
+                    value={formData.recurringInterval}
+                    onChange={(e) => setFormData({ ...formData, recurringInterval: parseInt(e.target.value) || 1 })}
+                    min="1"
+                    required
+                  />
+                  <small className="form-hint">
+                    Every {formData.recurringInterval} {formData.recurringType === 'yearly' ? 'year(s)' : formData.recurringType === 'monthly' ? 'month(s)' : formData.recurringType === 'biweekly' ? '2-week period(s)' : 'week(s)'}
+                  </small>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="form-row">
+              <div className="form-group">
+                <label>Due Date</label>
+                <input
+                  type="date"
+                  value={formData.date}
+                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                  required
+                />
+              </div>
+            </div>
+          )}
+          
           <div className="form-row">
             <div className="form-group">
               <label>Description</label>
@@ -141,23 +233,34 @@ function BillManager({ bills, categories, onAddBill, onUpdateBill, onDeleteBill 
         ) : (
           sortedBills.map(bill => {
             const categoryName = getCategoryName(bill.categoryId);
-            const billDate = new Date(bill.date);
+            const billDate = new Date(bill.startDate || bill.date);
             const today = new Date();
             today.setHours(0, 0, 0, 0);
-            const isPastDue = billDate < today;
-            const isDueToday = billDate.toDateString() === today.toDateString();
+            // For recurring bills, only check if start date is past (not individual instances)
+            const isPastDue = !bill.isRecurring && billDate < today;
+            const isDueToday = !bill.isRecurring && billDate.toDateString() === today.toDateString();
 
             return (
               <div key={bill.id} className={`bill-item ${isPastDue ? 'past-due' : ''} ${isDueToday ? 'due-today' : ''}`}>
                 <div className="bill-main">
                   <div className="bill-info">
                     <div className="bill-header-row">
-                      <span className="bill-date">{bill.date}</span>
+                      <span className="bill-date">
+                        {bill.isRecurring 
+                          ? `${bill.startDate || bill.date} (${bill.recurringType}, every ${bill.recurringInterval || 1})`
+                          : bill.date
+                        }
+                      </span>
+                      {bill.isRecurring && (
+                        <span className="bill-status-badge" style={{ background: 'var(--primary-color)', color: 'white' }}>
+                          Recurring
+                        </span>
+                      )}
                       {categoryName && (
                         <span className="bill-category-badge">{categoryName}</span>
                       )}
-                      {isPastDue && <span className="bill-status-badge past-due-badge">Past Due</span>}
-                      {isDueToday && !isPastDue && <span className="bill-status-badge due-today-badge">Due Today</span>}
+                      {!bill.isRecurring && isPastDue && <span className="bill-status-badge past-due-badge">Past Due</span>}
+                      {!bill.isRecurring && isDueToday && !isPastDue && <span className="bill-status-badge due-today-badge">Due Today</span>}
                     </div>
                     {bill.description && (
                       <span className="bill-description">{bill.description}</span>
